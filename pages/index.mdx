@@ -1,11 +1,166 @@
-# Introduction
- 
-Welcome to Nextra! This is a basic docs template. You can use it as a starting point for your own project :)
+# NOOS Boot
 
-## What is Nextra?
+Ubuntu 设备远程管理启动引导系统。通过 S3 远程分发更新包，设备自动下载安装 LLM 服务控制器。
 
-A **simple**, **powerful** and **flexible** site generation framework with everything you love from Next.js.
+## 项目结构
 
-## Documentation
+```
+noos-boot/
+├── factory_setup.sh              # 设备出厂入口脚本（不可变）
+├── build/
+│   └── build.sh                  # 构建编排脚本
+├── boot/
+│   └── llm-launcher/             # Tauri 2 桌面应用（Rust + React）
+│       ├── src-tauri/src/        # Rust 后端
+│       ├── src/                  # React 前端
+│       ├── build_deb.sh          # .deb 打包脚本（Docker 构建）
+│       ├── Dockerfile.build      # 构建环境镜像
+│       └── docker_build_inner.sh # 容器内构建脚本
+└── public/                       # 发布到设备的文件（= zip 包内容）
+    ├── setup.sh                  # 设备安装入口脚本（可更新）
+    ├── setup_mcu_tool_perm.sh    # MCU tool 免密 sudo 配置
+    ├── setup_npu_load_sudo.sh    # NPU 负载读取免密 sudo 配置
+    └── version.txt               # 当前版本号
+```
 
-The documentation is available at [https://nextra.site](https://nextra.site).
+## llm-launcher
+
+Tauri 2 桌面应用（Rust 后端 + React + TailwindCSS），用于一键启动/停止 LLM 服务。
+
+**功能：**
+
+- Service 标签页：启动/停止 LLM 服务、模型选择、实时日志输出
+- Monitor 标签页：系统指标 JSON 展示（CPU/内存/磁盘/GPU/NPU）
+- 进程状态检测（pgrep）、训练时长统计
+- NPU 负载结构化解析（device → cores → load%）
+- 心跳上报由 systemd daemon 后台负责，GUI 仅采集展示
+
+**运行时依赖：** WebKit2GTK 4.1、OpenSSL 3、GTK 3、Linux
+
+## 开发
+
+```bash
+cd boot/llm-launcher
+bun install
+bun run tauri dev
+
+# Rust 代码检查
+cd src-tauri && cargo check
+```
+
+## 构建
+
+通过 Docker 交叉编译 Linux arm64 二进制，打包为 .deb：
+
+```bash
+# 默认构建
+./build/build.sh
+
+# 指定版本
+./build/build.sh --version 2.5
+
+# 指定架构（默认自动检测）
+ARCH=arm64 ./build/build.sh
+```
+
+构建流程：
+
+1. Docker 容器编译 Tauri 二进制（debian:bookworm-slim，USTC 镜像加速）
+2. 组装 .deb 包（`dpkg-deb --build`）
+3. 将 .deb 复制到 `public/`，打包为 `noos-boot-{version}.zip`
+4. 产物输出到 `dist/`
+
+Docker 使用命名卷缓存 Cargo 和 bun 依赖，支持增量构建。
+
+**构建产物：**
+
+```
+dist/
+├── noos-boot-2.5.zip    # 上传到 S3
+└── version.txt          # 上传到 S3
+```
+
+## 部署
+
+### 服务器
+
+上传 `dist/` 中的文件到 S3：
+
+```
+https://noos-bucket.s3.ap-southeast-1.amazonaws.com/noos-boot/
+├── version.txt
+└── noos-boot-2.5.zip
+```
+
+### 设备
+
+设备出厂只需一个文件 `factory_setup.sh`，首次运行：
+
+```bash
+sudo ./factory_setup.sh
+```
+
+执行流程：
+
+```
+factory_setup.sh（不可变）
+  ├── 从 S3 下载 version.txt → 获取最新版本号
+  ├── 下载 noos-boot-{version}.zip
+  ├── 解压到 /opt/noos-boot/{version}/
+  └── exec setup.sh（可更新）
+        ├── 自动检测桌面用户名（UID >= 1000）
+        ├── 配置 sudo 免密 + !requiretty
+        ├── dpkg -i llm-launcher_*.deb
+        ├── apt-get install -f -y（修复依赖）
+        ├── 复制桌面快捷方式 + 设置可信
+        └── kill 旧 GUI 进程
+```
+
+远程更新由 systemd timer 定期触发 `factory_setup.sh`，自动下载最新版本执行 `setup.sh`。
+
+### 设备路径
+
+```
+/opt/noos-boot/
+├── version.txt
+├── 2.4/                    # 版本目录（旧版本保留）
+│   ├── setup.sh
+│   └── llm-launcher_2.4_arm64.deb
+└── 2.5/
+    ├── setup.sh
+    └── llm-launcher_2.5_arm64.deb
+
+/opt/mt-ai/
+├── llm-launcher/
+│   └── llm-launcher        # Tauri 单二进制（.deb 安装）
+└── llm/
+    └── start_ds.sh          # LLM 服务启动脚本
+```
+
+## 固定文件约定
+
+| 文件 | 说明 |
+|------|------|
+| `factory_setup.sh` | 文件固定，内容固定（出厂后不可变） |
+| `setup.sh` | 文件名固定，内容可变（可远程更新） |
+| `version.txt` | 文件名固定，内容可变 |
+
+## 常用命令
+
+```bash
+# 查看心跳 daemon 状态
+systemctl status llm-heartbeat
+
+# 查看心跳日志
+journalctl -u llm-heartbeat -f
+
+# 手动触发更新
+sudo ./factory_setup.sh
+```
+
+## 注意事项
+
+- `factory_setup.sh` 必须以 root 运行（`sudo`）
+- sudoers 脚本自动检测桌面用户，配置 `!requiretty` 支持 GUI 免密调用
+- llm-launcher 启动脚本内置 `WEBKIT_DISABLE_COMPOSITING_MODE=1`
+- 前端使用 **bun** 作为包管理器
