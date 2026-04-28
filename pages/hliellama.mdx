@@ -124,10 +124,23 @@ cd ~/houmo-HLIELLama-xh2
 ./bin/model-cli pull 1767880490959
 ```
 
-### 查看下载进度
+### 下载 Qwen3.5-35B-A3B（ModelScope）
+
+```bash
+modelscope download \
+  --model Houmo/himodel_qwen3.5_35b_gguf \
+  --local_dir ~/houmo-HLIELLama-xh2/models/himodel_qwen3.5_35b_gguf
+```
+
+> 模型来源：https://modelscope.cn/collections/Houmo/lanyue-GGUF
+
+### 查看下载进度 / 本地模型列表
 
 ```bash
 ./bin/model-cli list
+
+# 或直接查看目录
+ls -lh ~/houmo-HLIELLama-xh2/models/
 ```
 
 ---
