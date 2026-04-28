@@ -1,31 +1,298 @@
-# Another Page
+# HouMo HLIELLama 部署使用指南
 
-```js filename="demo.js" {3} copy
-let a = 1;
+## 硬件环境
 
-console.log(a);
+| 项目 | 详情 |
+|------|------|
+| 设备 | Moore Threads M1000 MQ50 Board |
+| CPU | ARM Cortex-A78 × 12核，2.65 GHz |
+| 系统内存 | 32 GB（CPU + GPU 共享） |
+| GPU | Moore Threads iGPU，31.15 GB 统一内存 |
+| **NPU** | **HoumoNPU LQ50，24 GB 专属内存，210 TOPS** |
+| 存储 | 1TB NVMe SSD |
+| OS | Ubuntu，Linux 6.6.10，aarch64 |
+
+> NPU 的 24 GB 独立于系统 32 GB 之外，专供 HLIELLama 推理使用。
+
+---
+
+## 目录结构
+
+```
+~/houmo-HLIELLama-xh2/
+├── bin/
+│   ├── llama-server          # 主推理服务（HTTP API）
+│   ├── llama-cli             # 命令行交互
+│   ├── llama-bench           # 性能测试
+│   ├── llama-gguf            # GGUF 工具
+│   ├── llama-gguf-split      # GGUF 分割工具
+│   ├── model-cli             # 模型管理工具（下载/加载/查询）
+│   ├── hlaw_ollama           # Ollama 兼容层
+│   └── qwen3_nonthinking.jinja  # Qwen3 非思维链模板
+├── models/                   # 模型存放目录
+├── scripts/
+│   ├── convert_hm_to_gguf.py # HouMo 格式转 GGUF
+│   └── gguf-py/
+├── service/
+│   ├── install_llama-server.sh   # 安装为系统服务
+│   ├── uninstall_llama-server.sh
+│   ├── install_ollama.sh
+│   └── uninstall_ollama.sh
+├── include/
+├── lib/
+└── version.txt               # llama.cpp=2.0.0，lanyue2.0
 ```
 
-## Component
+---
 
-import { useState } from 'react'
+## model-cli 使用
 
-{/* Import CSS modules */}
-import styles from '../components/counters.module.css'
+### 命令总览
 
-export const Counter = () => {
-  const [count, setCount] = useState(0);
-  return (
-    <div>
-      <button onClick={() => setCount(count + 1)} className={styles.counter}>Clicked {count} times</button>
-    </div>
-  );
-};
+```bash
+cd ~/houmo-HLIELLama-xh2
 
-<Counter/>
+# 查询云端可用模型
+./bin/model-cli query
 
-## External Component
+# 按条件筛选
+./bin/model-cli query "target=xh2"
 
-import Counters from '../components/counters'
+# 下载模型（用 ID）
+./bin/model-cli pull <ID>
 
-<Counters />
+# 查看本地已下载模型
+./bin/model-cli list
+
+# 查看当前加载中的模型
+./bin/model-cli ps
+
+# 加载模型（启动推理）
+./bin/model-cli run <ID>
+
+# 卸载模型
+./bin/model-cli stop <ID>
+
+# 删除本地模型
+./bin/model-cli rm <ID>
+```
+
+### 云端可用模型列表（target=xh2）
+
+| ID | 模型名 | 大小 | CTX | DEVICE | 说明 |
+|----|--------|------|-----|--------|------|
+| 1767880490946 | qwen3-vl | 4b | 16384 | 1 | 多模态视觉 |
+| 1767880490947 | qwen3 | 14b | 32768 | 2 | 需 2 个 NPU |
+| 1767880490948 | qwen3 | 32b | 32768 | 4 | 需 4 个 NPU |
+| 1767880490949 | qwen2.5 | 7b | 8192 | 1 | |
+| 1767880490950 | qwen2.5 | 7b | 32768 | 1 | 长上下文版 |
+| 1767880490951 | deepseek | 8b | 32768 | 1 | |
+| 1767880490952 | gpt | 20b | 65536 | 1 | |
+| 1767880490955 | gte | 1.5b | 2048 | 1 | Embedding |
+| 1767880490956 | bge | 0.5b | 32768 | 1 | Embedding |
+| 1767880490957 | bge-reranker-v2-m3 | 0.5b | 32768 | 1 | Reranker |
+| 1767880490958 | qwen3 | 4b | 32768 | 1 | |
+| **1767880490959** | **qwen3** | **8b** | **32768** | **1** | **推荐日常使用** |
+| 1767880490960 | qwen3 | 8b | 16384 | 4 | 高并发版 |
+| 1767880490961 | qwen3 | 14b | 16384 | 1 | |
+| 1767880490962 | qwen3-vl | 4b | 32768 | 1 | 多模态视觉 |
+| 1767880490963 | qwen3-vl | 8b | 32768 | 1 | 多模态视觉 |
+| 1767880490964 | qwen2.5-vl | 7b | 8192 | 1 | 多模态视觉 |
+| **1767880490965** | **qwen3** | **30b-a3b** | **32768** | **1** | **主力模型** |
+| 1767880490966 | qwen3-vl | 30b-a3b | 8192 | 1 | 多模态视觉 |
+| 1772188146032 | qwen3-2507 | 30b-a3b | 32768 | 1 | 新版本 |
+| 1772188325612 | qwen3-2507 | 30b-a3b | 32768 | 2 | 需 2 个 NPU |
+| 1772799664016 | gpt | 20b | 65536 | 2 | 需 2 个 NPU |
+| 1772878235701 | gpt | 20b | 131072 | 1 | 超长上下文 |
+
+> DEVICE=1 表示使用 1 个 NPU，本机只有 1 个 NPU，只能选 DEVICE=1 的模型。
+
+---
+
+## 下载模型
+
+### 下载 Qwen3-30B-A3B（主力模型）
+
+```bash
+cd ~/houmo-HLIELLama-xh2
+./bin/model-cli pull 1767880490965
+```
+
+### 下载 Qwen3-8B（轻量快速）
+
+```bash
+./bin/model-cli pull 1767880490959
+```
+
+### 查看下载进度
+
+```bash
+./bin/model-cli list
+```
+
+---
+
+## 启动推理服务（llama-server）
+
+### 基本启动
+
+```bash
+cd ~/houmo-HLIELLama-xh2
+
+./bin/llama-server \
+  -m models/<模型文件名>.gguf \
+  --port 17701 \
+  --host 0.0.0.0 \
+  -ngl 999
+```
+
+### 常用参数说明
+
+| 参数 | 说明 | 推荐值 |
+|------|------|--------|
+| `-m` | 模型文件路径 | `models/xxx.gguf` |
+| `-ngl N` | 卸载到 NPU 的层数（999=全部） | `999` |
+| `-c N` | 上下文长度 | `32768` |
+| `-t N` | CPU 线程数 | `8` |
+| `-np N` | 并行槽位数（并发请求数） | `1` |
+| `--port` | 监听端口 | `17701` |
+| `--host` | 监听地址（0.0.0.0=外网可访问） | `127.0.0.1` |
+| `--temp` | 生成温度 | `0.6` |
+| `--top-p` | Top-P 采样 | `0.95` |
+| `--ctx-size` | 同 `-c` | `32768` |
+
+### Qwen3-30B-A3B 推荐启动命令
+
+```bash
+./bin/llama-server \
+  -m models/HiModel_xh2_qwen3_30b_a3b_256_32k_b1_1chip_2cores_v1.0.0_20260205.gguf \
+  --port 17701 \
+  --host 127.0.0.1 \
+  -ngl 999 \
+  -c 32768 \
+  -t 8 \
+  --temp 0.6 \
+  --top-p 0.95 \
+  --reasoning-format deepseek
+```
+
+### 启动日志关键信息解读
+
+成功启动后日志会显示：
+
+```
+[HoumoNPU] Successfully loaded: libhal_xh2a.so     ← NPU 驱动加载成功
+houmo_load: succeed to load prefill.hmm             ← 预填充引擎加载到 NPU
+houmo_load: succeed to load decode.hmm              ← 解码引擎加载到 NPU
+=VmHWM: 17195 MB                                    ← NPU 占用 ~17 GB 专属内存
+=VmRSS: 688 MB                                      ← 系统 RAM 仅占用 688 MB
+=UpTime: 9.047978 seconds                           ← 9 秒启动完成
+main: server is listening on http://127.0.0.1:17701 ← 服务就绪
+```
+
+---
+
+## NPU 监控
+
+### 主命令：hm_smi（HouMo 专属，类似 nvidia-smi）
+
+```bash
+# 完整信息
+hm_smi -a
+
+# 实时刷新（每秒）
+watch -n 1 'hm_smi -a'
+
+# 只看关键指标
+watch -n 1 'hm_smi -a | grep -E "IPU_Load|Core._Util|DDR_Memory|Core_Freq|Temperature"'
+```
+
+### hm_smi 输出解读
+
+```
+IPU_Load      : 100.0 %      ← NPU 整体负载
+Core0_Util    : 100.0 %      ← 核心0利用率
+Core1_Util    : 100.0 %      ← 核心1利用率
+Core_Freq     : 1400.0 MHz   ← 当前运行频率（最高）
+DDR_Memory_Total : 24448 MB  ← NPU 专属内存总量
+DDR_Memory_Free  :  7052 MB  ← 剩余（跑30B模型后）
+Core0 温度    : 42.3 C       ← 正常范围
+Core1 温度    : 45.6 C       ← 正常范围
+```
+
+### 辅助命令
+
+```bash
+# NPU 设备列表（含内存）
+~/houmo-HLIELLama-xh2/bin/llama-server --list-devices
+
+# NPU 核心负载（内核接口）
+sudo cat /sys/kernel/debug/gc/load
+
+# GPU + CPU 对比监控
+mthreads-smi
+```
+
+---
+
+## API 调用（OpenAI 兼容）
+
+服务启动后，默认端口 17701：
+
+```bash
+# 测试连通性
+curl http://127.0.0.1:17701/v1/models
+
+# 发送推理请求
+curl http://127.0.0.1:17701/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "musachat_local",
+    "messages": [{"role": "user", "content": "你好"}],
+    "max_tokens": 200
+  }'
+```
+
+---
+
+## 资源占用验证（Qwen3-30B-A3B 运行时）
+
+### HLIELLama（NPU）资源占用
+
+| 资源 | 数值 | 说明 |
+|------|------|------|
+| NPU 专属内存 | ~17 GB / 24 GB | 模型权重全部在 NPU 内存 |
+| 系统 RAM（VmRSS） | **688 MB** | 极少，仅进程本身 |
+| GPU 利用率 | 0% | GPU 完全不参与推理 |
+| CPU 利用率 | 低（~13%） | 仅负责调度和 HTTP |
+| 启动时间 | 9 秒 | |
+
+> ✅ 确认：HLIELLama 仅使用 NPU 专属内存，不占用系统 RAM 和 GPU。
+
+### 与 vLLM（GPU）对比
+
+| 项目 | vLLM + MUSA（GPU） | HLIELLama（NPU） |
+|------|-------------------|-----------------|
+| 推理硬件 | Moore Threads iGPU | HoumoNPU LQ50 |
+| 可用内存 | 31 GB（与系统共享） | **24 GB 专属** |
+| 系统 RAM 占用 | **28.3 GB**（压垮系统） | **688 MB**（几乎不占） |
+| 模型格式 | SafeTensors / GPTQ | GGUF（HouMo 专属编译） |
+| 启动工具 | ExoBrain GUI | llama-server / model-cli |
+| 端口 | 32102 | 17701 |
+| Qwen3-30B 状态 | OOM 风险，内存紧张 | ✅ 充裕，稳定运行 |
+| GPU 占用 | ✅ 使用（21%+ 底噪） | ❌ 不使用（0%） |
+| NPU 占用 | ❌ 不使用 | ✅ 全部使用 |
+
+### 两者可同时运行
+
+由于资源完全隔离（GPU vs NPU），理论上可同时运行：
+- vLLM（GPU，端口 32102）+ HLIELLama（NPU，端口 17701）
+- 总内存：GPU 31 GB + NPU 24 GB = **55 GB 可用推理内存**
+
+---
+
+## 参考链接
+
+- HouMo 开发者文档：https://developer.houmoai.com/hmdoc/lanyue/software/latest/hlie/hliellama/hliellama2.0.0/output.html
+- HLIELLama 部署指南：https://houmo.feishu.cn/wiki/WRxKwG1lGi9VOqk1ikVcOLXhnCd
+- Qwen3-30B-A3B（ModelScope）：https://www.modelscope.cn/models/Qwen/Qwen3-30B-A3B
