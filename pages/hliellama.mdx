@@ -205,7 +205,9 @@ cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
   --reasoning-format deepseek
 ```
 
-### Qwen3.5-35B-A3B 启动命令
+### Qwen3.5-35B-A3B 启动命令 
+
+#### (带参数)
 
 ```bash
 cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
@@ -219,7 +221,13 @@ cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
   --top-p 0.95 \
   --reasoning-format deepseek
 ```
-
+#### (不带参数) 删除思考模式
+```bash
+cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
+  -m models/himodel_qwen3.5_35b_gguf/HiModel_xh2_qwen3.5_35b-a3b_256_64k_b1_1chip_2cores_v1.2.0_20260401.gguf \
+  --jinja \
+  --chat-template-file bin/qwen3_nonthinking.jinja
+```
 ### 启动日志关键信息解读
 
 成功启动后日志会显示：
