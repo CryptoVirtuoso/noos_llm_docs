@@ -98,7 +98,7 @@ cd ~/houmo-HLIELLama-xh2
 | 1767880490962 | qwen3-vl | 4b | 32768 | 1 | 多模态视觉 |
 | 1767880490963 | qwen3-vl | 8b | 32768 | 1 | 多模态视觉 |
 | 1767880490964 | qwen2.5-vl | 7b | 8192 | 1 | 多模态视觉 |
-| **1767880490965** | **qwen3** | **30b-a3b** | **32768** | **1** | **主力模型** |
+| **1767880490965** | **qwen3** | **30b-a3b** | **32768** | **1** | **主力模型（已下载）** |
 | 1767880490966 | qwen3-vl | 30b-a3b | 8192 | 1 | 多模态视觉 |
 | 1772188146032 | qwen3-2507 | 30b-a3b | 32768 | 1 | 新版本 |
 | 1772188325612 | qwen3-2507 | 30b-a3b | 32768 | 2 | 需 2 个 NPU |
@@ -106,6 +106,17 @@ cd ~/houmo-HLIELLama-xh2
 | 1772878235701 | gpt | 20b | 131072 | 1 | 超长上下文 |
 
 > DEVICE=1 表示使用 1 个 NPU，本机只有 1 个 NPU，只能选 DEVICE=1 的模型。
+
+---
+
+## 本地已下载模型
+
+| 模型 | 文件大小 | 上下文 | 版本 | 文件路径 |
+|------|---------|--------|------|---------|
+| Qwen3-30B-A3B | 17 GB | 32K | v1.0.0 | `models/HiModel_xh2_qwen3_30b_a3b_256_32k_b1_1chip_2cores_v1.0.0_20260205.gguf` |
+| Qwen3.5-35B-A3B | 55 GB | **64K** | v1.2.0 | `models/himodel_qwen3.5_35b_gguf/HiModel_xh2_qwen3.5_35b-a3b_256_64k_b1_1chip_2cores_v1.2.0_20260401.gguf` |
+
+> Qwen3.5-35B 文件 55GB > NPU 专属内存 24GB，HouMo SDK 通过 PCIe 流式加载 MoE 专家权重，实际运行时按需调度。
 
 ---
 
@@ -130,6 +141,11 @@ cd ~/houmo-HLIELLama-xh2
 modelscope download \
   --model Houmo/himodel_qwen3.5_35b_gguf \
   --local_dir ~/houmo-HLIELLama-xh2/models/himodel_qwen3.5_35b_gguf
+```
+
+下载完成后文件路径：
+```
+models/himodel_qwen3.5_35b_gguf/HiModel_xh2_qwen3.5_35b-a3b_256_64k_b1_1chip_2cores_v1.2.0_20260401.gguf
 ```
 
 > 模型来源：https://modelscope.cn/collections/Houmo/lanyue-GGUF
@@ -174,15 +190,30 @@ cd ~/houmo-HLIELLama-xh2
 | `--top-p` | Top-P 采样 | `0.95` |
 | `--ctx-size` | 同 `-c` | `32768` |
 
-### Qwen3-30B-A3B 推荐启动命令
+### Qwen3-30B-A3B 启动命令
 
 ```bash
-./bin/llama-server \
+cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
   -m models/HiModel_xh2_qwen3_30b_a3b_256_32k_b1_1chip_2cores_v1.0.0_20260205.gguf \
   --port 17701 \
   --host 127.0.0.1 \
   -ngl 999 \
   -c 32768 \
+  -t 8 \
+  --temp 0.6 \
+  --top-p 0.95 \
+  --reasoning-format deepseek
+```
+
+### Qwen3.5-35B-A3B 启动命令
+
+```bash
+cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
+  -m models/himodel_qwen3.5_35b_gguf/HiModel_xh2_qwen3.5_35b-a3b_256_64k_b1_1chip_2cores_v1.2.0_20260401.gguf \
+  --port 17701 \
+  --host 127.0.0.1 \
+  -ngl 999 \
+  -c 64000 \
   -t 8 \
   --temp 0.6 \
   --top-p 0.95 \
