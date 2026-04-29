@@ -1,6 +1,7 @@
 {
   "index": "Introduction",
   "hliellama": "HLIELLama",
+  "bug": "Bug 反馈记录",
   "about": {
     "title": "About",
     "type": "page"
