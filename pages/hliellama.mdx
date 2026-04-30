@@ -96,10 +96,10 @@ cd ~/houmo-HLIELLama-xh2
 | 1767880490960 | qwen3 | 8b | 16384 | 4 | 高并发版 |
 | 1767880490961 | qwen3 | 14b | 16384 | 1 | |
 | 1767880490962 | qwen3-vl | 4b | 32768 | 1 | 多模态视觉 |
-| 1767880490963 | qwen3-vl | 8b | 32768 | 1 | 多模态视觉 |
+| **1767880490963** | **qwen3-vl** | **8b** | **32768** | **1** | **多模态视觉（推荐下载）** |
 | 1767880490964 | qwen2.5-vl | 7b | 8192 | 1 | 多模态视觉 |
 | **1767880490965** | **qwen3** | **30b-a3b** | **32768** | **1** | **主力模型（已下载）** |
-| 1767880490966 | qwen3-vl | 30b-a3b | 8192 | 1 | 多模态视觉 |
+| **1767880490966** | **qwen3-vl** | **30b-a3b** | **8192** | **1** | **多模态视觉（最强，推荐下载）** |
 | 1772188146032 | qwen3-2507 | 30b-a3b | 32768 | 1 | 新版本 |
 | 1772188325612 | qwen3-2507 | 30b-a3b | 32768 | 2 | 需 2 个 NPU |
 | 1772799664016 | gpt | 20b | 65536 | 2 | 需 2 个 NPU |
@@ -150,6 +150,18 @@ models/himodel_qwen3.5_35b_gguf/HiModel_xh2_qwen3.5_35b-a3b_256_64k_b1_1chip_2co
 
 > 模型来源：https://modelscope.cn/collections/Houmo/lanyue-GGUF
 
+### 下载多模态模型（model-cli）
+
+支持图片识别的视觉语言模型：
+
+```bash
+# Qwen3-VL 8B（推荐，均衡）
+cd ~/houmo-HLIELLama-xh2 && ./bin/model-cli pull 1767880490963
+
+# Qwen3-VL 30B-A3B（最强视觉，较大）
+./bin/model-cli pull 1767880490966
+```
+
 ### 查看下载进度 / 本地模型列表
 
 ```bash
@@ -190,7 +202,7 @@ cd ~/houmo-HLIELLama-xh2
 | `--top-p` | Top-P 采样 | `0.95` |
 | `--ctx-size` | 同 `-c` | `32768` |
 
-### Qwen3-30B-A3B 启动命令
+### Qwen3-30B-A3B 启动命令（开启思考模式）
 
 ```bash
 cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
@@ -205,9 +217,58 @@ cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
   --reasoning-format deepseek
 ```
 
-### Qwen3.5-35B-A3B 启动命令 
+### Qwen3-30B-A3B 启动命令（关闭思考模式）
 
-#### (带参数)
+使用 `bin/` 目录内置的非思考模板 `qwen3_nonthinking.jinja`，直接跳过 `<think>` 推理阶段，响应更快：
+
+```bash
+cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
+  -m models/HiModel_xh2_qwen3_30b_a3b_256_32k_b1_1chip_2cores_v1.0.0_20260205.gguf \
+  --port 17701 \
+  --host 127.0.0.1 \
+  -ngl 999 \
+  -c 32768 \
+  -t 8 \
+  --temp 0.7 \
+  --top-p 0.95 \
+  --repeat-penalty 1.15 \
+  --repeat-last-n 256 \
+  --chat-template-file bin/qwen3_nonthinking.jinja
+```
+
+> `qwen3_nonthinking.jinja` 位于 `~/houmo-HLIELLama-xh2/bin/`，HouMo 官方提供，专为关闭 Qwen3 思考模式设计。
+
+### 关闭思考模式后的 API 字段说明
+
+使用 `qwen3_nonthinking.jinja` 后，HouMo 版 llama.cpp 存在固定的字段路由行为：
+
+| 字段 | 内容 | 说明 |
+|------|------|------|
+| `content` | 空 | HouMo 特有行为，无法改变 |
+| `reasoning_content` | 实际答案 | 从此字段读取回复 |
+
+**验证思考模式是否关闭：**
+```bash
+curl http://127.0.0.1:17701/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"1+1等于几"}],"max_tokens":200}' \
+  | python3 -m json.tool | grep -E '"content"|"reasoning_content"'
+```
+
+- `reasoning_content` 有简短直接答案 → ✅ 思考已关闭
+- `reasoning_content` 有大量推理过程 → ❌ 思考未关闭
+
+**开发者 Python 调用示例：**
+```python
+msg = response.choices[0].message
+# content 为空时读 reasoning_content
+answer = msg.content or msg.reasoning_content
+print(answer)
+```
+
+> WebUI（http://127.0.0.1:17701）聊天不受字段影响，显示正常。
+
+### Qwen3.5-35B-A3B 启动命令
 
 ```bash
 cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
@@ -221,13 +282,30 @@ cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
   --top-p 0.95 \
   --reasoning-format deepseek
 ```
-#### (不带参数) 删除思考模式
+
+### 多模态模型启动命令
+
+多模态模型下载后包含两个文件：主模型 + 视觉投影文件（mmproj），需同时指定：
+
 ```bash
+# 下载完成后先查看模型文件
+./bin/model-cli list
+
+# Qwen3-VL 8B 启动示例（下载后补充实际路径）
 cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
-  -m models/himodel_qwen3.5_35b_gguf/HiModel_xh2_qwen3.5_35b-a3b_256_64k_b1_1chip_2cores_v1.2.0_20260401.gguf \
+  -m models/<qwen3-vl-8b主模型文件>.gguf \
+  --mmproj models/<qwen3-vl-8b视觉投影文件>.gguf \
+  --port 17701 \
+  --host 127.0.0.1 \
+  -ngl 999 \
+  -c 8192 \
+  -t 8 \
   --jinja \
   --chat-template-file bin/qwen3_nonthinking.jinja
 ```
+
+> 多模态模型启动后可在 WebUI 上传图片进行识别和问答。
+
 ### 启动日志关键信息解读
 
 成功启动后日志会显示：
