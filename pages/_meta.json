@@ -5,5 +5,10 @@
   "about": {
     "title": "About",
     "type": "page"
-  }
+  },
+  "noos_name": {
+    "title": "NOOS NAME",
+    "type": "separator"
+  },
+  "design": "Design"
 }
