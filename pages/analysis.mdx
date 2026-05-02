@@ -1,2 +1,481 @@
-# Analysis
+# houmo-examples-xh2 v1.2.0 SDK 分析文档
 
+> 设备：AI BOX（Moore Threads M1000 MQ50，HoumoNPU LQ50，210 TOPS，24GB NPU专属内存）
+> SDK路径：`~/houmo-examples-xh2/`
+> 分析日期：2026-05-01
+
+---
+
+## 一、SDK 定位与核心概念
+
+houmo-examples-xh2 是 HouMo（后摩智能）面向 XH2A NPU 的**底层开发 SDK**，提供从模型量化、编译到推理的完整工具链源码示例。
+
+### 与 HLIELLama 2.0（lanyue2.0）的根本区别
+
+| 维度 | HLIELLama 2.0（lanyue2.0） | houmo-examples v1.2.0 |
+|------|---------------------------|----------------------|
+| **定位** | 高层 LLM 推理框架（成品工具） | 底层 NPU 开发 SDK（源码示例） |
+| **支持模型** | LLM + VLM（仅语言/多模态） | **全模态**：LLM / VLM / ASR / TTS / 检测 / 分割 / 分类 / OCR / Embedding / Reranker / Omni |
+| **使用方式** | 二进制工具（llama-server） | Python 脚本 + C++ 源码 |
+| **模型格式** | GGUF（内嵌 HMM） | HMM 原生格式 |
+| **推理接口** | OpenAI 兼容 HTTP API | Python 直接调用 / C++ API |
+| **量化工具** | model-cli 下载预量化模型 | ptq.py（自行量化） |
+| **编译工具** | 无需（预编译） | build.py（编译为 HMM 格式） |
+| **开发难度** | ★☆☆☆☆（直接用） | ★★★★☆（需懂量化/编译流程） |
+| **适合人群** | 应用开发者 | AI 底层研发工程师 |
+| **评测工具** | llama-bench | hmeval + llm_perf + tcim_perf |
+| **特有能力** | Ollama 兼容层、model-cli | **TTS / ASR / 目标检测 / Embedding / Reranker** |
+
+---
+
+## 二、完整目录结构
+
+```
+~/houmo-examples-xh2/
+├── apis/                        # C/C++ API 头文件（底层 NPU 接口）
+├── env.sh / env.bat             # 环境变量配置脚本
+├── requirements.txt             # Python 依赖
+├── README.md                    # 顶层说明文档
+│
+├── hmatc/                       # HouMo ATC 编译器（模型编译工具链）
+│   ├── install.sh               # 安装脚本
+│   ├── setup.py                 # Python 包安装
+│   └── requirements.txt
+│
+├── hmodel/xh2/                  # 核心模型框架（Python）
+│   ├── examples/                # 代码示例
+│   ├── benchmark_test/          # YOLOv3~v11 基准测试 + 性能仪表板
+│   ├── xhmodel_merak/           # 模型评测框架
+│   ├── xh_model_zoo/            # 模型动物园基类
+│   ├── xh_model_zoo_develop/    # 开发版本
+│   ├── tests/                   # qwen2/qwen3 导出测试
+│   └── hm_bert_chinese_export.py
+│
+├── models/                      # 各类模型示例（按任务分类）
+│   ├── asr/                     # 语音识别（5个模型）
+│   ├── autodrive/               # 自动驾驶（1个模型）
+│   ├── backbone/                # 图像分类骨干网（5个模型）
+│   ├── detection/               # 目标检测（11个模型）
+│   ├── embedding/               # 文本向量化（3个模型）
+│   ├── estimation/              # 姿态估计（1个模型）
+│   ├── llm/                     # 大语言模型（7个模型）
+│   ├── ocr/                     # 光学字符识别（3个模型）
+│   ├── omni/                    # 全模态（1个模型）
+│   ├── reranker/                # 重排序（1个模型）
+│   ├── segmentation/            # 图像分割（1个模型）
+│   ├── tts/                     # 语音合成（1个模型）
+│   └── vlm/                     # 视觉语言模型（2个模型）
+│
+└── tools/                       # 工具集
+    ├── bandwidth_perf/          # 内存带宽测试（Python）
+    ├── common/                  # C++ 公共头文件（imageproc, logging, spdlog）
+    ├── computing_perf/          # 算力性能测试（Python）
+    ├── hm_check/                # 硬件检查工具（C++，含 .hmm 测试模型）
+    ├── hmeval/                  # HouMo 评测框架（Python CLI）
+    ├── llm_perf/                # LLM 性能测试（C++，HmllmInfer + HmvllmInfer）
+    ├── tcim_perf/               # TCIM 算子性能测试（C++）
+    └── win_envs/                # Windows 环境配置
+```
+
+---
+
+## 三、支持模型全览（38个模型）
+
+### 3.1 语音识别 ASR（5个）
+
+| 模型 | 说明 | 特点 |
+|------|------|------|
+| **Whisper** | OpenAI Whisper | 通用多语言语音识别 |
+| **Whisper-Turbo** | Whisper 加速版 | 更快，精度略降 |
+| **SenseVoice** | 阿里巴巴 | 中文优化，带情感识别 |
+| **GLM-ASR** | 智谱 GLM | 基于 GLM 的语音识别 |
+| **Qwen3-ASR** | 阿里巴巴 Qwen3 | 最新 Qwen3 语音识别 |
+
+### 3.2 语音合成 TTS（1个）
+
+| 模型 | 说明 | 特点 |
+|------|------|------|
+| **CosyVoice3** | 阿里巴巴 | 高质量中英文 TTS，支持克隆音色 |
+
+> ⚠️ **重要**：HLIELLama 2.0 没有 TTS 能力，houmo-examples 新增了语音合成！
+
+### 3.3 目标检测 Detection（11个）
+
+| 模型 | 说明 |
+|------|------|
+| YOLOv3 | 经典检测 |
+| YOLOv5s | 轻量检测 |
+| YOLOv5s_feature | 特征提取版 |
+| YOLOv5m_face | 人脸检测 |
+| YOLOv7 | 高精度检测 |
+| YOLOv8m | 主流版本 |
+| YOLOv9m | 新一代 |
+| YOLOv10m | 无NMS检测 |
+| YOLO11m | 最新版本 |
+| YOLO12m | 最新版本 |
+| YOLOX | 旷视科技 |
+
+### 3.4 图像分类骨干网 Backbone（5个）
+
+| 模型 | 说明 |
+|------|------|
+| ResNet50 | 经典卷积网络 |
+| MobileNetV2 | 移动端轻量 |
+| EfficientNet | 高效分类 |
+| ViT-B-16 | 视觉Transformer |
+| YOLOv8m-cls | YOLO分类版 |
+
+### 3.5 大语言模型 LLM（7个）
+
+| 模型 | 说明 |
+|------|------|
+| Qwen3-8B / Qwen3-14B | Qwen3 标准版（含8B/14B配置） |
+| Qwen3-30B-A3B | MoE架构，激活3B |
+| Qwen3.5 | 含视觉处理（image_processing_qwen3_5.py） |
+| Qwen2.5 | 上一代旗舰 |
+| DeepSeek-R1-Qwen3-8B | DeepSeek R1 思维链版 |
+| GPT-OSS | 开源 GPT 兼容 |
+
+### 3.6 视觉语言模型 VLM（2个）
+
+| 模型 | 说明 |
+|------|------|
+| Qwen2.5-VL | 视觉理解 + 语言生成 |
+| Qwen3-VL | 最新视觉语言模型 |
+
+### 3.7 文本向量化 Embedding（3个）
+
+| 模型 | 说明 | 用途 |
+|------|------|------|
+| BGE | 北京智源 | RAG知识库检索 |
+| GTE | 阿里巴巴 | 高质量中英文向量 |
+| Qwen3-Embedding | 阿里巴巴 | 最新向量化模型 |
+
+> **用途**：构建 RAG（检索增强生成）系统，知识库问答
+
+### 3.8 重排序 Reranker（1个）
+
+| 模型 | 说明 | 用途 |
+|------|------|------|
+| Qwen3-Reranker | 阿里巴巴 | RAG检索结果重排序，提升准确度 |
+
+### 3.9 OCR（2个）
+
+| 模型 | 说明 |
+|------|------|
+| GLM-OCR | 智谱 GLM 文字识别 |
+| LPRNet | 车牌识别（License Plate Recognition） |
+| PPOCRv3 | 百度飞桨 OCR v3（检测+识别） |
+
+### 3.10 图像分割 Segmentation（1个）
+
+| 模型 | 说明 |
+|------|------|
+| YOLOv8m-seg | 实例分割 |
+
+### 3.11 姿态估计 Estimation（1个）
+
+| 模型 | 说明 |
+|------|------|
+| YOLOv8m-pose | 人体关键点检测（17个关键点）|
+
+### 3.12 全模态 Omni（1个）
+
+| 模型 | 说明 |
+|------|------|
+| MiniCPM-O | 面壁智能，音频+视觉+文本全模态 |
+
+### 3.13 自动驾驶 Autodrive（1个）
+
+| 模型 | 说明 |
+|------|------|
+| YOLOP | 车道线 + 可行驶区域 + 目标检测 一体化 |
+
+---
+
+## 四、模型开发流程（每个模型通用）
+
+每个模型目录下都有相同的文件结构，代表一套完整的 NPU 部署流程：
+
+```
+models/<category>/<model>/
+├── get_model.py     # Step 1: 从 ModelScope/HuggingFace 下载原始模型
+├── ptq.py           # Step 2: PTQ 后训练量化（INT8/INT4）
+├── build.py         # Step 3: 编译为 HMM 格式（NPU可执行文件）
+├── demo.py          # Step 4: 推理演示
+├── config.yaml/.yml # 模型配置（量化参数、精度设置等）
+├── requirements.txt # 依赖包
+├── test.sh          # 一键测试脚本
+└── README.MD        # 模型说明文档
+```
+
+### 完整工作流
+
+```
+原始模型（PyTorch/ONNX）
+    ↓ get_model.py（下载）
+原始权重文件
+    ↓ ptq.py（量化）
+量化校准模型
+    ↓ build.py（hmatc编译）
+.hmm 文件（NPU可执行）
+    ↓ demo.py（推理）
+推理结果
+```
+
+---
+
+## 五、工具链详解
+
+### 5.1 hmatc（HouMo ATC 编译器）
+
+HouMo 专有的模型编译器，将量化后的模型编译为 XH2A NPU 可执行的 `.hmm` 格式。
+
+```bash
+# 安装
+cd ~/houmo-examples-xh2/hmatc
+bash install.sh
+```
+
+### 5.2 hmeval（评测框架）
+
+Python CLI 工具，用于评测模型精度和性能。
+
+```bash
+# 安装
+cd ~/houmo-examples-xh2/tools/hmeval
+bash scripts/install.sh
+
+# 使用
+python -m hmeval --help
+```
+
+### 5.3 llm_perf（LLM 性能测试，C++）
+
+专为 LLM 设计的 C++ 性能测试工具，支持：
+- `HmllmInfer.cc` - 单批次 LLM 推理
+- `HmllmInferMultiBatch.cc` - 多批次并行推理
+- `HmvllmInfer.cc` - vLLM 兼容推理
+- `HmEmbedding.cc` - Embedding 推理
+- `device_monitor/` - NPU 设备监控
+- `perf_tracker/` - 推理性能追踪（TTFT、TPOT、吞吐量）
+
+```bash
+cd ~/houmo-examples-xh2/tools/llm_perf
+bash build_linux.sh
+```
+
+### 5.4 bandwidth_perf（带宽测试）
+
+```bash
+cd ~/houmo-examples-xh2/tools/bandwidth_perf
+bash run.sh
+```
+
+### 5.5 computing_perf（算力测试）
+
+```bash
+cd ~/houmo-examples-xh2/tools/computing_perf
+bash run.sh
+```
+
+### 5.6 hm_check（硬件检测，C++）
+
+内置 3 个 `.hmm` 测试模型，验证 NPU 是否正常工作：
+- `xh2_bandwidth_read.hmm` - 读带宽测试
+- `xh2_bandwidth_write.hmm` - 写带宽测试  
+- `xh2_compute.hmm` - 计算性能测试
+
+```bash
+cd ~/houmo-examples-xh2/tools/hm_check
+bash build_linux.sh
+./hm_check
+```
+
+---
+
+## 六、环境配置
+
+```bash
+# 激活 houmo 环境变量
+cd ~/houmo-examples-xh2
+source env.sh
+
+# 安装 Python 依赖
+pip install -r requirements.txt
+
+# 安装 hmatc 编译器
+cd hmatc && bash install.sh && cd ..
+
+# 安装核心框架
+cd hmodel/xh2 && pip install -e . && cd ../..
+```
+
+---
+
+## 七、快速体验示例
+
+### 示例1：目标检测（YOLOv8m）
+
+```bash
+cd ~/houmo-examples-xh2/models/detection/yolov8m
+
+# 下载模型
+python get_model.py
+
+# 量化
+python ptq.py
+
+# 编译为HMM
+python build.py
+
+# 运行演示
+python demo.py  # 或: bash test.sh
+```
+
+### 示例2：语音识别（Whisper）
+
+```bash
+cd ~/houmo-examples-xh2/models/asr/whisper
+
+pip install -r requirements.txt
+python get_model.py
+python ptq.py
+python build.py
+python demo.py
+```
+
+### 示例3：语音合成 TTS（CosyVoice3）
+
+```bash
+cd ~/houmo-examples-xh2/models/tts/cosyvoice3
+
+pip install -r requirements.txt
+python get_model.py
+python ptq.py
+python build.py
+python demo.py  # 生成 output.wav
+```
+
+### 示例4：文本向量化（BGE Embedding）
+
+```bash
+cd ~/houmo-examples-xh2/models/embedding/bge
+
+python get_model.py
+python ptq.py
+python build.py
+python demo.py
+```
+
+### 示例5：LLM 推理（Qwen3-30B-A3B 底层SDK方式）
+
+```bash
+cd ~/houmo-examples-xh2/models/llm/qwen3-30b-a3b
+
+pip install -r requirements.txt
+python get_model.py    # 下载原始模型
+python ptq.py          # 量化
+python build.py        # 编译为HMM（注意：HLIELLama已帮你做好了这步）
+python demo.py         # 运行推理
+```
+
+> 💡 对于 LLM 推理，**HLIELLama 2.0 更方便**（已预编译 HMM）
+> 对于 ASR/TTS/Detection 等，**houmo-examples 是唯一选择**
+
+---
+
+## 八、与 ExoBrain 的关系和价值
+
+### 当前 ExoBrain 架构
+
+```
+ExoBrain GUI（Tauri 2 + React）
+    → Rust 后端
+        → vLLM / HLIELLama（仅LLM推理）
+```
+
+### 基于 houmo-examples 的扩展架构
+
+```
+ExoBrain GUI（Tauri 2 + React）
+    → Rust 后端
+        ├── HLIELLama（LLM/VLM 推理）
+        ├── ASR 服务（Whisper/SenseVoice → NPU）  ← 新增语音输入
+        ├── TTS 服务（CosyVoice3 → NPU）          ← 新增语音输出
+        ├── Embedding 服务（BGE/GTE → NPU）        ← 新增RAG能力
+        ├── Reranker 服务（Qwen3 → NPU）           ← 新增RAG精排
+        └── 视觉服务（YOLO → NPU）                  ← 新增图像感知
+```
+
+### 可构建的完整 AI 应用能力
+
+| 能力模块 | 模型 | NPU负载 | 描述 |
+|----------|------|---------|------|
+| 对话推理 | Qwen3-30B-A3B（via HLIELLama） | ~17GB | 已有 |
+| 多模态理解 | Qwen3-VL（via HLIELLama） | ~待测 | 已有 |
+| 语音输入 ASR | Whisper/SenseVoice | 较小 | **新增** |
+| 语音输出 TTS | CosyVoice3 | 较小 | **新增** |
+| 知识库检索 | BGE/GTE Embedding | 很小 | **新增** |
+| 检索精排 | Qwen3-Reranker | 较小 | **新增** |
+| 图像识别 | YOLOv8m | 很小 | **新增** |
+| OCR | GLM-OCR | 较小 | **新增** |
+
+> **关键优势**：所有任务都在 NPU 24GB 专属内存中运行，不占用系统 32GB RAM，
+> 理论上 ASR + TTS + Embedding + Reranker + YOLO 可以和 LLM **同时运行**
+
+---
+
+## 九、建议的学习路径
+
+### 阶段1：验证环境（1天）
+```bash
+source env.sh
+cd tools/hm_check && bash build_linux.sh && ./hm_check
+```
+
+### 阶段2：跑通简单CV模型（2-3天）
+```bash
+# YOLOv8m 目标检测
+cd models/detection/yolov8m && bash test.sh
+```
+
+### 阶段3：跑通 ASR/TTS（3-5天）
+```bash
+cd models/asr/whisper && bash test.sh
+cd models/tts/cosyvoice3 && bash test.sh
+```
+
+### 阶段4：跑通 Embedding（2天）
+```bash
+cd models/embedding/bge && bash test.sh
+```
+
+### 阶段5：集成到 ExoBrain（1-2周）
+- 将各服务包装为 HTTP API
+- 在 Rust/Tauri 后端调用
+
+---
+
+## 十、注意事项
+
+1. **模型编译耗时**：ptq.py + build.py 可能需要数小时，仅需做一次
+2. **存储需求**：原始模型 + 量化模型 + HMM，需要预留 2-3x 模型大小的空间
+3. **与 HLIELLama 的互补关系**：
+   - LLM 推理 → **用 HLIELLama**（已优化，有 OpenAI API）
+   - ASR / TTS / CV / Embedding → **用 houmo-examples**
+4. **hmatc 版本对齐**：确保 hmatc 编译器版本与驱动版本匹配（驱动 V1.0.0）
+5. **NPU内存管理**：多个模型同时运行时注意 24GB 总量限制
+
+---
+
+## 附录：关键文件索引
+
+| 文件 | 路径 | 用途 |
+|------|------|------|
+| env.sh | `~/houmo-examples-xh2/env.sh` | 必须先 source |
+| hmatc/install.sh | `hmatc/install.sh` | 编译器安装 |
+| benchmark.yml | `models/benchmark.yml` | 全量模型基准配置 |
+| copilot-instructions.md | `hmodel/xh2/.github/` | AI辅助开发说明 |
+| perf_config.yaml | `tools/llm_perf/perf_config.yaml` | LLM性能测试配置 |
+| template.yaml | `tools/llm_perf/configs/template.yaml` | 配置模板 |
