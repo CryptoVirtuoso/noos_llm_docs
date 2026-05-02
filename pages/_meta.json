@@ -6,6 +6,11 @@
     "title": "About",
     "type": "page"
   },
+  "houmo_v12": {
+    "title": "houmo v1.2",
+    "type": "separator"
+  },
+  "analysis": "Analysis",
   "noos_name": {
     "title": "NOOS NAME",
     "type": "separator"

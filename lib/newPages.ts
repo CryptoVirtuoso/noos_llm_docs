@@ -6,6 +6,7 @@
 export const NEW_PAGES: Record<string, string> = {
   '/hliellama': '2026-04-30',
   '/bug': '2026-04-30',
+  '/analysis': '2026-04-30',
   '/design': '2026-04-30',
 }
 
