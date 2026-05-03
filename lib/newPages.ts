@@ -1,13 +1,11 @@
-/**
- * 在这里管理"new"标签
- * key: 页面路径
- * value: 版本号（内容有重大更新时修改这个值，new 标签会重新出现）
- */
+// 此文件由 scripts/generate-versions.js 自动生成，请勿手动修改
+// 文件内容变化时哈希自动更新，new 标签会重新显示
+
 export const NEW_PAGES: Record<string, string> = {
-  '/hliellama': '2026-05-03',
-  '/bug': '2026-05-03',
-  '/analysis': '2026-05-03',
-  '/design': '2026-05-03',
+  "/hliellama": "f8c17b13",
+  "/bug": "fc7897fb",
+  "/analysis": "2f13b125",
+  "/design": "b80de5e8"
 }
 
 export const STORAGE_KEY = 'noos_visited_pages'

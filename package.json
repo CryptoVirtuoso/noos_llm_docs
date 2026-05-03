@@ -3,6 +3,8 @@
   "version": "0.0.1",
   "description": "Nextra docs template",
   "scripts": {
+    "prebuild": "node scripts/generate-versions.js",
+    "predev": "node scripts/generate-versions.js",
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
