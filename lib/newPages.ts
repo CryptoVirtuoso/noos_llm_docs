@@ -5,7 +5,7 @@ export const NEW_PAGES: Record<string, string> = {
   "/hliellama": "f8c17b13",
   "/bug": "fc7897fb",
   "/analysis": "2f13b125",
-  "/design": "e7750a89"
+  "/design": "d47dc289"
 }
 
 export const STORAGE_KEY = 'noos_visited_pages'
