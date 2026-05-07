@@ -285,26 +285,44 @@ cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
 
 ### 多模态模型启动命令
 
-多模态模型下载后包含两个文件：主模型 + 视觉投影文件（mmproj），需同时指定：
+#### 为什么有两个文件？
+
+多模态（VLM）模型由两个独立模块组成：
+
+| 文件 | 参数 | 作用 |
+|------|------|------|
+| `HiModel_xh2_qwen3-vl_*.gguf` | `-m` | **主模型**：负责语言理解、推理、生成回答 |
+| `mmproj_xh2_qwen3-vl_*.gguf` | `--mmproj` | **视觉投影器**：把图片像素转成主模型能理解的向量 |
+
+```
+图片输入 → mmproj（眼睛：图片→向量） → 主模型（大脑：理解+回答）
+```
+
+纯文字模型（如 Qwen3-30B-A3B）只有一个文件，因为不需要视觉模块。
+
+---
+
+#### Qwen3-VL 8B 启动（关闭思考）
 
 ```bash
-# 下载完成后先查看模型文件
-./bin/model-cli list
-
-# Qwen3-VL 8B 启动示例（下载后补充实际路径）
 cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
-  -m models/<qwen3-vl-8b主模型文件>.gguf \
-  --mmproj models/<qwen3-vl-8b视觉投影文件>.gguf \
+  -m models/qwen3-vl_8b_32768_1_1/HiModel_xh2_qwen3-vl_8b_256_32k_b1_1chip_2cores_v1.0.0_20260205.gguf \
+  --mmproj models/qwen3-vl_8b_32768_1_1/mmproj_xh2_qwen3-vl_8b_2cores_vit_448x448_v1.0.0_20260205.gguf \
   --port 17701 \
-  --host 127.0.0.1 \
-  -ngl 999 \
-  -c 8192 \
-  -t 8 \
-  --jinja \
   --chat-template-file bin/qwen3_nonthinking.jinja
 ```
 
-> 多模态模型启动后可在 WebUI 上传图片进行识别和问答。
+#### Qwen3-VL 30B-A3B 启动（关闭思考）
+
+```bash
+cd ~/houmo-HLIELLama-xh2 && ./bin/llama-server \
+  -m models/qwen3-vl_30b-a3b_8192_1_1/HiModel_xh2_qwen3-vl_30b_a3b_256_8k_b1_1chip_2cores_v1.0.0_20260205.gguf \
+  --mmproj models/qwen3-vl_30b-a3b_8192_1_1/mmproj_xh2_qwen3-vl_30b_2cores_vit_448x448_v1.0.0_20260205.gguf \
+  --port 17701 \
+  --chat-template-file bin/qwen3_nonthinking.jinja
+```
+
+> 启动后可在 WebUI（http://127.0.0.1:17701）上传图片进行识别和问答。
 
 ### 启动日志关键信息解读
 

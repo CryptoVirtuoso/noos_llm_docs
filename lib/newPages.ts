@@ -2,7 +2,7 @@
 // 文件内容变化时哈希自动更新，new 标签会重新显示
 
 export const NEW_PAGES: Record<string, string> = {
-  "/hliellama": "f8c17b13",
+  "/hliellama": "c4320a29",
   "/bug": "fc7897fb",
   "/analysis": "2f13b125",
   "/design": "d47dc289"
