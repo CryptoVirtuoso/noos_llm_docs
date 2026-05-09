@@ -1,0 +1,247 @@
+# ExoBrain 50TOPS 硬件信息（M1000 ME21）
+
+## 基本系统
+
+| 项目 | 详情 |
+|------|------|
+| 设备型号 | Moore Threads M1000 ME21 Board |
+| 主机名 | exobrain |
+| 用户 | EXOBRAIN（uid 1001） |
+| OS | Ubuntu 22.04.4 LTS (Jammy Jellyfish) |
+| 内核 | Linux 6.6.10 SMP PREEMPT |
+| 架构 | aarch64（ARM 64位） |
+| 内核编译时间 | 2026-04-03 |
+| noos-boot 版本 | 7.0 |
+
+---
+
+## 聚合硬件总览
+
+| 模块 | 型号 / 规格 | 算力 / 容量 | 备注 |
+|------|------------|------------|------|
+| **CPU** | ARM Cortex-A78 × 12核 | 2.65 GHz | SoC 集成 |
+| **GPU** | Moore Threads M1000 iGPU | 730 MHz | MUSA 后端，vLLM 推理 |
+| **NPU** | m1000-npu（SoC 集成） | **50 TOPS** | 非 PCIe 外挂 |
+| **内存** | LPDDR 统一内存 | **32 GB** | CPU + GPU + NPU 共享 |
+| **存储** | NVMe MAP1202 SSD | **476.9 GB** | 深圳实创忆，122GB已用 |
+| **VPU** | 硬件编解码器 | 编/解码各 0% | 视频加速单元 |
+| **风扇** | pwm-fan | 5000 rpm | 主动散热 |
+
+> ⚠️ 本设备 NPU 为 **SoC 集成型**（50 TOPS），与 MQ50 的 PCIe 外挂型后摩 XH2A（210 TOPS）**完全不同**，不兼容 HLIELLama。
+
+---
+
+## CPU 详细信息
+
+| 项目 | 详情 |
+|------|------|
+| 型号 | ARM Cortex-A78（M1000 SoC 内置） |
+| 核心数 | 12 核（单线程/核，单 cluster） |
+| 最高频率 | 2650 MHz |
+| 最低频率 | 1731 MHz |
+| Stepping | r1p2 |
+| L1d 缓存 | 768 KiB × 12 = 9 MiB |
+| L1i 缓存 | 768 KiB × 12 = 9 MiB |
+| L2 缓存 | 6 MiB × 12 = 72 MiB |
+| L3 缓存 | 12 MiB × 3 = 36 MiB |
+| 空载温度 | 39.79 °C |
+| 空载利用率 | ~23.67%（常驻服务占用） |
+
+---
+
+## GPU 详细信息
+
+| 项目 | 详情 |
+|------|------|
+| 型号 | Moore Threads M1000 iGPU |
+| 驱动 | mtgpu（DKMS）+ mtdisp + mt_ion |
+| 设备节点 | `/dev/mtgpu.0`，`/dev/dri/card0`，`/dev/dri/renderD128` |
+| sysfs 路径 | `/sys/devices/platform/soc@0/800000.gpu` |
+| 当前频率 | 730 MHz |
+| 空载温度 | 38.89 °C |
+| 空载利用率 | ~4%（驱动底噪） |
+| 显示输出 | DP-1（1920×1080 主输出），DP-2/3/4 未连接 |
+| 空闲状态 | suspended（自动挂起省电） |
+| 推理用途 | **vLLM + MUSA 后端**（GPU 推理主力） |
+| 监控工具 | `mthreads-smi` |
+| 内存架构 | 与系统内存共享（统一内存，无独立显存）|
+
+---
+
+## NPU 详细信息
+
+| 项目 | 详情 |
+|------|------|
+| 名称 | m1000-npu（of_node compatible: mthreads,m1000-npu） |
+| 架构 | **SoC 片内集成**（非 PCIe 外挂） |
+| 平台地址 | `a00000.npu`（SoC 内部地址空间） |
+| 内核模块 | `npucore`（基于 Vivante Graphics Driver） |
+| 设备节点 | `/dev/npucore` |
+| sysfs 路径 | `/sys/devices/platform/a00000.npu` |
+| IOMMU 组 | 24 |
+| 标称算力 | **50 TOPS** |
+| 当前状态 | unsupported（常开，无运行时挂起）|
+| 驱动类型 | m1000_npu_model_zoo 兼容（MTNN 格式） |
+| 监控命令 | `cat /sys/devices/platform/a00000.npu/power/runtime_status` |
+
+> **与 MQ50（210 TOPS）的核心差异：**
+> - MQ50 NPU = 后摩 XH2A IPU，PCIe 4.0 x4 外挂，24GB 专属内存
+> - ME21 NPU = 摩尔线程 m1000-npu，SoC 集成，共享系统内存
+> - 两者**驱动、格式、SDK 完全不兼容**
+
+---
+
+## 内存详细信息
+
+| 项目 | 详情 |
+|------|------|
+| 总容量 | 32 GB（32,659,204 KB） |
+| 空载已用 | 2.9 GB |
+| 空载空闲 | 24 GB |
+| 空载可用 | 27 GB |
+| 运行时已用 | ~22 GB（vLLM + 常驻服务） |
+| Swap | 8 GB（`/var/swapfile`，已用 876 MB）|
+| 内存架构 | **CPU + GPU + NPU 三者共享统一内存池** |
+| 内存类型 | LPDDR（具体型号待确认）|
+
+> ⚠️ vLLM 运行 Qwen3-8B 时约占用 6-7 GB，运行 30B 模型风险较高（OOM）。
+
+---
+
+## 存储详细信息
+
+| 项目 | 详情 |
+|------|------|
+| 设备型号 | 深圳实创忆 MAP1202-Based NVMe SSD |
+| 接口 | NVMe（PCIe，BDF: 41:00.0）|
+| 总容量 | 476.9 GB |
+| 分区1 | nvme0n1p1，1 GB（引导分区）|
+| 分区2 | nvme0n1p2，475.9 GB（根分区 `/`）|
+| 已用 | 122 GB（28%）|
+| 可用 | 323 GB |
+| 文件系统 | ext4 |
+
+---
+
+## VPU / 风扇 / 其他
+
+| 项目 | 详情 |
+|------|------|
+| VPU 编码器 | 0.00%（硬件视频编码，空闲）|
+| VPU 解码器 | 0.00%（硬件视频解码，空闲）|
+| 风扇 | pwm-fan，**5000 rpm**（主动散热）|
+| BIOS | Not Specified |
+| 虚拟化 | `/dev/kvm`（KVM 支持）|
+| 内存分配 | `/dev/ion0`（ION 零拷贝共享内存）|
+| 加速计算 | `/dev/ac_dev` |
+
+---
+
+## PCIe 拓扑
+
+| BDF | 设备 | 说明 |
+|-----|------|------|
+| 00/40/80/c0:00.0 | PCI 桥（0202:a101）| 4 个 Root 桥 |
+| 41:00.0 | MAP1202 NVMe SSD | 存储 |
+| 81:00.0 | Realtek b852 | 网卡 |
+| c1:00.0 | Renesas uPD720201 | USB 3.0 控制器 |
+
+---
+
+## LLM 推理环境
+
+| 项目 | 详情 |
+|------|------|
+| Python | `/usr/local/miniforge3/envs/vllm/bin/python`（3.10.20）|
+| Conda 环境 | `vllm`（新设备路线，区别于老设备 `v1.2`）|
+| vLLM 版本 | 0.9.2.dev259+gc2cd4356d |
+| 推理后端 | **MUSA（摩尔线程，vllm_musa 插件）** |
+| API 端口 | 32102（OpenAI 兼容）|
+| 模型名称 | `musachat_local` |
+| 模型注册表 | `/opt/mt-ai/models/registry.json` |
+| 启动脚本 | `/opt/mt-ai/llm/model_manager.sh` |
+| GUI 应用 | ExoBrain Tauri（`/opt/mt-ai/exobrain/exobrain`）|
+
+### 已部署模型
+
+| 模型 | 参数 | 路径 | 备注 |
+|------|------|------|------|
+| gptq-Qwen3-8B | 8B | `/opt/mt-ai/models/gptq-Qwen3-8B` | GPTQ-4bit，~5GB，默认 |
+| Qwen3-30B-A3B-GPTQ-Int4 | 30B MoE | `/opt/mt-ai/models/Qwen3-30B-A3B-GPTQ-Int4` | INT4 量化 |
+
+---
+
+## 资源基线数据
+
+### 空载（未运行模型）
+
+| 指标 | 数值 |
+|------|------|
+| CPU 利用率 | ~12% |
+| CPU 温度 | 39.79 °C |
+| GPU 利用率 | 4%（驱动底噪）|
+| GPU 温度 | 38.89 °C |
+| GPU 频率 | 730 MHz |
+| 系统内存已用 | 2.9 GB / 32 GB |
+| NPU | 常开（无负载）|
+| 风扇转速 | 5000 rpm |
+
+### 运行中（vLLM + Qwen3-8B + 常驻服务）
+
+| 指标 | 数值 |
+|------|------|
+| 系统内存已用 | **~22 GB / 32 GB** |
+| GPU 利用率 | 4%+（推理时更高）|
+| Swap 已用 | 876 MB |
+| 风扇转速 | 6250 rpm |
+
+---
+
+## 监控命令参考
+
+```bash
+# 整机概览（CPU/GPU/温度/风扇）
+mthreads-smi
+
+# CPU + 内存实时监控
+htop
+
+# GPU 电源状态
+cat /sys/devices/platform/soc@0/800000.gpu/power/runtime_status
+
+# NPU 状态
+cat /sys/devices/platform/a00000.npu/power/runtime_status
+cat /sys/devices/platform/a00000.npu/of_node/compatible
+
+# 查看运行中进程
+ps aux | grep -iE "vllm|qwen|model_manager"
+
+# 模型管理
+/opt/mt-ai/llm/model_manager.sh status
+/opt/mt-ai/llm/model_manager.sh list
+
+# 磁盘 IO
+iostat -x 2
+```
+
+---
+
+## 与 MQ50（AI BOX）硬件对比
+
+| 维度 | ME21（本机，50TOPS） | MQ50（AI BOX，210TOPS）|
+|------|---------------------|----------------------|
+| SoC 板型 | M1000 ME21 | M1000 MQ50 |
+| CPU | Cortex-A78 × 12，2.65 GHz | Cortex-A78 × 12，2.65 GHz |
+| 内存 | 32 GB 统一 | 32 GB 统一 |
+| 存储 | 476.9 GB NVMe | 953.9 GB NVMe |
+| GPU | M1000 iGPU，730 MHz | M1000 iGPU，730 MHz |
+| **NPU 品牌** | **摩尔线程 m1000-npu** | **后摩 HoumoNPU LQ50** |
+| **NPU 算力** | **50 TOPS** | **210 TOPS** |
+| **NPU 接口** | **SoC 集成（a00000）** | **PCIe 4.0 x4 外挂** |
+| **NPU 内存** | **共享系统内存** | **24 GB 专属内存** |
+| NPU 设备节点 | `/dev/npucore` | `/dev/xh2a_ipu0` + `/dev/npucore` |
+| 推理框架 | vLLM + MUSA（GPU） | HLIELLama（NPU）|
+| 风扇 | 有（5000 rpm） | 无（被动散热）|
+| VPU | 有（视频编解码）| 无 |
+| HLIELLama 兼容 | ❌ | ✅ |
+| m1000_npu_model_zoo | ✅ | ❌ |

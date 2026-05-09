@@ -8,6 +8,7 @@ const TRACKED_PAGES = {
   '/bug':       'pages/bug.mdx',
   '/analysis':  'pages/analysis.mdx',
   '/design':    'pages/design.mdx',
+  '/me21':      'pages/me21.mdx',
 }
 
 const versions = {}

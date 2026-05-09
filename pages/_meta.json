@@ -1,4 +1,9 @@
 {
+  "moore_threads": {
+    "title": "摩尔线程",
+    "type": "separator"
+  },
+  "me21": "设备信息",
   "index": "Introduction",
   "hliellama": "HLIELLama",
   "bug": "Bug",
